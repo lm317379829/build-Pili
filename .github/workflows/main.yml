@@ -97,17 +97,17 @@ jobs:
             # 图标尺寸映射
             declare -A SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
             
-            # 生成 mipmap 图标
+            # 生成 mipmap 图标（填充纯白底色，消除安装器中的黑底）
             for density in "${!SIZES[@]}"; do
               size="${SIZES[$density]}"
-              convert assets/icon.png -background transparent -resize ${size}x${size} "pilipalus-source/android/app/src/main/res/mipmap-$density/ic_launcher.png"
-              echo "生成 mipmap-$density/ic_launcher.png (${size}x${size})"
+              convert assets/icon.png -resize ${size}x${size} -background white -alpha remove -flatten "pilipalus-source/android/app/src/main/res/mipmap-$density/ic_launcher.png"
+              echo "生成 mipmap-$density/ic_launcher.png (${size}x${size}, 纯白背景底)"
             done
             
-            # 生成自适应图标背景（完整图标限制在 60% 黄金安全区，透明填充至 288x288）
-            convert assets/icon.png -resize 172x172 -background transparent -gravity center -extent 288x288 \
+            # 生成自适应图标背景（完整图标限制在 60% 黄金安全区，纯白填充至 288x288，彻底消除启动屏黑底）
+            convert assets/icon.png -resize 172x172 -background white -gravity center -extent 288x288 -alpha remove -flatten \
               pilipalus-source/android/app/src/main/res/drawable/ic_launcher_background.png
-            echo "生成 drawable/ic_launcher_background.png (288x288, 60% 主体安全边距)"
+            echo "生成 drawable/ic_launcher_background.png (288x288, 60% 主体安全边距，纯白背景底)"
             
             # 生成透明的前景图标 (108x108)
             convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
