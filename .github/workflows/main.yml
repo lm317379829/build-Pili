@@ -191,6 +191,33 @@ jobs:
           echo "✅ build_config.dart 注入成功，时间戳: $BUILD_TIME_MS，Hash: ${{ steps.get-latest.outputs.sha }}"
           cat pilipalus-source/lib/build_config.dart
 
+      - name: 初始化并固化永久数字证书
+        if: steps.check-update.outputs.need_build == 'true'
+        run: |
+          echo "检查本地 Git 仓库中是否存在固定的签名文件..."
+          
+          # 1. 如果仓库中没有 release.jks，现场用 keytool 自动生成一颗永久证书，并静默 push 提交回仓库中
+          if [ ! -f "release.jks" ]; then
+            echo "⚠️ 未在仓库中发现固定签名 release.jks，正在首次生成..."
+            keytool -genkey -v -keystore release.jks \
+              -alias pili-key-alias -keyalg RSA -keysize 2048 -validity 20000 \
+              -storepass "pili_secure_password_123" -keypass "pili_secure_password_123" \
+              -dname "CN=PiliPlus, OU=Build, O=PiliPlusBuild, L=Guangzhou, S=Guangdong, C=CN"
+            
+            echo "✅ 证书首次生成成功，正在自动持久化提交至您的 GitHub 仓库..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add release.jks
+            git commit -m "chore: persist static release keystore for reproducible signing [skip ci]"
+            git push origin main || echo "⚠️ 证书推送回远端失败，可能权限不足，但不影响本次构建。"
+          else
+            echo "✅ 在仓库中发现固定的永久签名 release.jks，无限复用此证书！"
+          fi
+          
+          # 2. 将此永久签名拷贝至安卓工程对应的发布目录下，便于后续 apksigner 使用
+          mkdir -p pilipalus-source/android/app
+          cp release.jks pilipalus-source/android/app/release.jks
+
       - name: 安装依赖
         if: steps.check-update.outputs.need_build == 'true'
         run: |
@@ -204,7 +231,15 @@ jobs:
           flutter build apk --release --split-per-abi --target-platform android-arm64
           APK_NAME="${{ env.APP_NAME }}_${{ steps.version.outputs.tag_name }}_arm64-v8a.apk"
           mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "$APK_NAME"
-          echo "✅ APK 构建完成: $APK_NAME"
+          
+          echo "🛡️ 正在使用自持久化证书 release.jks 对 APK 进行 100% 强制二次覆写签名..."
+          apksigner sign --ks android/app/release.jks \
+            --ks-key-alias pili-key-alias \
+            --ks-pass pass:pili_secure_password_123 \
+            --key-pass pass:pili_secure_password_123 \
+            "$APK_NAME"
+            
+          echo "✅ APK 构建与固化签名圆满完成: $APK_NAME"
           ls -lh "$APK_NAME"
 
       - name: 发布 Release
