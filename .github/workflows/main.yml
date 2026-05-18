@@ -7,7 +7,7 @@ on:
 
 env:
   SOURCE_REPO: bggRGjQaUbCoE/PiliPlus
-  TARGET_REPO: lm317379829/buildPiliPili
+  TARGET_REPO: lm317379829/build-Pili
   APP_NAME: 哔哩哔哩
   KEEP_COUNT: 3
 
@@ -86,8 +86,8 @@ jobs:
           if [ -f "assets/icon.png" ]; then
             echo "找到自定义图标，正在处理..."
             
-            # 创建 drawable-v21 目录（自适应图标背景与前景）
-            mkdir -p pilipalus-source/android/app/src/main/res/drawable-v21
+            # 创建 drawable 目录（代替 drawable-v21，通用性最强）
+            mkdir -p pilipalus-source/android/app/src/main/res/drawable
             
             # 创建 mipmap 目录
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
@@ -104,13 +104,19 @@ jobs:
               echo "生成 mipmap-$density/ic_launcher.png (${size}x${size})"
             done
             
-            # 生成自适应图标背景（完整图标，288x288）
-            convert assets/icon.png -resize 288x288 pilipalus-source/android/app/src/main/res/drawable-v21/ic_launcher_background.png
-            echo "生成 drawable-v21/ic_launcher_background.png (288x288)"
+            # 生成自适应图标背景（完整图标限制在 60% 黄金安全区，透明填充至 288x288）
+            convert assets/icon.png -resize 172x172 -background transparent -gravity center -extent 288x288 \
+              pilipalus-source/android/app/src/main/res/drawable/ic_launcher_background.png
+            echo "生成 drawable/ic_launcher_background.png (288x288, 60% 主体安全边距)"
             
             # 生成透明的前景图标 (108x108)
-            convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable-v21/ic_launcher_foreground.png
-            echo "生成 drawable-v21/ic_launcher_foreground.png (108x108)"
+            convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
+            echo "生成 drawable/ic_launcher_foreground.png (108x108)"
+            
+            # 物理清理所有与生成的 PNG 冲突的旧同名 XML 资源文件，防止 Gradle 资源合并 Duplicate resources 报错
+            find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_background.xml" -delete
+            find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_foreground.xml" -delete
+            echo "✅ 已物理清理冲突的同名 XML 自适应图标层定义文件"
             
             # 修改自适应图标 XML 文件，将背景指向刚生成的 drawable 图片，而非颜色
             XML_FILE="pilipalus-source/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
@@ -170,6 +176,21 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "版本: $VERSION | 标签: $TAG_NAME"
+
+      - name: 配置编译版本与 Commit Hash 信息
+        if: steps.check-update.outputs.need_build == 'true'
+        run: |
+          BUILD_TIME_MS=$(date +%s000)
+          cat > pilipalus-source/lib/build_config.dart << EOF
+          abstract final class BuildConfig {
+            static const int versionCode = ${{ steps.version.outputs.version_code }};
+            static const String versionName = '${{ steps.version.outputs.version }}';
+            static const int buildTime = $BUILD_TIME_MS;
+            static const String commitHash = '${{ steps.get-latest.outputs.sha }}';
+          }
+          EOF
+          echo "✅ build_config.dart 注入成功，时间戳: $BUILD_TIME_MS，Hash: ${{ steps.get-latest.outputs.sha }}"
+          cat pilipalus-source/lib/build_config.dart
 
       - name: 安装依赖
         if: steps.check-update.outputs.need_build == 'true'
