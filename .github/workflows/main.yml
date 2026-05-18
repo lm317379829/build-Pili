@@ -112,7 +112,6 @@ jobs:
             # 生成透明的前景图标 (108x108)
             convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
             echo "生成 drawable/ic_launcher_foreground.png (108x108)"
-            
             # 物理清理所有与生成的 PNG 冲突的旧同名 XML 资源文件，防止 Gradle 资源合并 Duplicate resources 报错
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_background.xml" -delete
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_foreground.xml" -delete
