@@ -141,9 +141,9 @@ jobs:
       - name: 修改应用名称
         if: steps.check-update.outputs.need_build == 'true'
         run: |
-          STRINGS_FILE="pilipalus-source/android/app/src/main/res/values/strings.xml"
-          mkdir -p "$(dirname "$STRINGS_FILE")"
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">哔哩哔哩</string>\n</resources>\n' > "$STRINGS_FILE"
+          # 使用 sed 直接替换原文件中的 app_name，避免创建重复文件
+          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">哔哩哔哩<\/string>/' pilipalus-source/android/app/src/main/res/values/strings.xml
+          grep "app_name" pilipalus-source/android/app/src/main/res/values/strings.xml
           echo "应用名称已修改为: ${{ env.APP_NAME }}"
 
       - name: 修改更新检查链接
