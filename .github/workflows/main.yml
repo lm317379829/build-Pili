@@ -232,14 +232,29 @@ jobs:
           APK_NAME="${{ env.APP_NAME }}_${{ steps.version.outputs.tag_name }}_arm64-v8a.apk"
           mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "$APK_NAME"
           
-          echo "🛡️ 正在使用自持久化证书 release.jks 对 APK 进行 100% 强制二次覆写签名..."
-          apksigner sign --ks android/app/release.jks \
-            --ks-key-alias pili-key-alias \
-            --ks-pass pass:pili_secure_password_123 \
-            --key-pass pass:pili_secure_password_123 \
-            "$APK_NAME"
-            
-          echo "✅ APK 构建与固化签名圆满完成: $APK_NAME"
+          echo "🛡️ 正在定位系统中的 apksigner 工具..."
+          # 优先使用 ANDROID_HOME 环境变量动态搜寻最新版 apksigner，确保 100% 兼容不同版本的 Actions Runner 容器
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "⚠️ 未在 ANDROID_HOME ($ANDROID_HOME) 中直接定位到 apksigner，尝试全局深搜..."
+            APKSIGNER=$(which apksigner || find /usr -name "apksigner" 2>/dev/null | head -n 1)
+          fi
+          
+          if [ -n "$APKSIGNER" ]; then
+            echo "✅ 成功找到 apksigner 工具，物理路径: $APKSIGNER"
+            echo "🛡️ 正在使用自持久化证书 release.jks 对 APK 进行 100% 强制二次覆写签名..."
+            "$APKSIGNER" sign --ks android/app/release.jks \
+              --ks-key-alias pili-key-alias \
+              --ks-pass pass:pili_secure_password_123 \
+              --key-pass pass:pili_secure_password_123 \
+              "$APK_NAME"
+            echo "✅ APK 固化签名圆满完成！"
+          else
+            echo "❌ 致命错误: 系统中未能定位到 apksigner 工具，无法完成安全签名加密！"
+            exit 1
+          fi
+          
+          echo "✅ APK 构建与签名完整流程圆满收官: $APK_NAME"
           ls -lh "$APK_NAME"
 
       - name: 发布 Release
