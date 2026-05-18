@@ -112,7 +112,6 @@ jobs:
             # 生成透明的前景图标 (108x108)
             convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
             echo "生成 drawable/ic_launcher_foreground.png (108x108)"
-            
             # 物理清理所有与生成的 PNG 冲突的旧同名 XML 资源文件，防止 Gradle 资源合并 Duplicate resources 报错
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_background.xml" -delete
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_foreground.xml" -delete
@@ -268,19 +267,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "开始清理旧 Action Run，保留最近 ${{ env.KEEP_COUNT }} 个..."
-          RUNS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-pilipalus.yml/runs?per_page=100" \
-            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
-          COUNT=0
-          for run_id in $RUNS; do
-            COUNT=$((COUNT + 1))
-            if [ $COUNT -gt ${{ env.KEEP_COUNT }} ]; then
-              echo "删除旧 Action Run: $run_id"
-              curl -s -X DELETE \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
-            fi
-          done
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/runs?per_page=100")
+          
+          # 防御性安全校验，防止接口返回空值或报错阻断构建流
+          if echo "$RESPONSE" | jq -e '.workflow_runs' >/dev/null 2>&1; then
+            RUNS=$(echo "$RESPONSE" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+            COUNT=0
+            for run_id in $RUNS; do
+              COUNT=$((COUNT + 1))
+              if [ $COUNT -gt ${{ env.KEEP_COUNT }} ]; then
+                echo "删除旧 Action Run: $run_id"
+                curl -s -X DELETE \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+              fi
+            done
+          else
+            echo "⚠️ 警告: 无法获取 Action Runs 列表或格式有误，跳过本轮清理以确保安全构建"
+          fi
           echo "✅ Action Run 清理完成"
 
       - name: 更新构建记录
