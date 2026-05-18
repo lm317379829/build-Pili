@@ -104,14 +104,14 @@ jobs:
               echo "生成 mipmap-$density/ic_launcher.png (${size}x${size}, 纯白背景底)"
             done
             
-            # 生成自适应图标背景（完整图标限制在 60% 黄金安全区，纯白填充至 288x288，彻底消除启动屏黑底）
-            convert assets/icon.png -resize 172x172 -background white -gravity center -extent 288x288 -alpha remove -flatten \
-              pilipalus-source/android/app/src/main/res/drawable/ic_launcher_background.png
-            echo "生成 drawable/ic_launcher_background.png (288x288, 60% 主体安全边距，纯白背景底)"
+            # 生成自适应图标背景（设为 100% 纯透明，确保桌面图标为完美的透明底）
+            convert -size 288x288 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_background.png
+            echo "生成 drawable/ic_launcher_background.png (288x288, 100% 纯透明背景图)"
             
-            # 生成透明的前景图标 (108x108)
-            convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
-            echo "生成 drawable/ic_launcher_foreground.png (108x108)"
+            # 生成自适应前景图标（将完整图标限制在 60% 黄金安全区，透明填充至 288x288，实现桌面完美呼吸感透明图标）
+            convert assets/icon.png -resize 172x172 -background transparent -gravity center -extent 288x288 \
+              pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
+            echo "生成 drawable/ic_launcher_foreground.png (288x288, 60% 主体安全边距，纯透明底)"
             # 物理清理所有与生成的 PNG 冲突的旧同名 XML 资源文件，防止 Gradle 资源合并 Duplicate resources 报错
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_background.xml" -delete
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_foreground.xml" -delete
