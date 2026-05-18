@@ -71,8 +71,9 @@ jobs:
           # 提取原始版本号的前三段 (如 2.0.7.2 -> 2.0.7)
           ORIGINAL_VERSION=$(echo "$CURRENT_VERSION" | sed 's/+.*//' | sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/')
           echo "原始三段版本: $ORIGINAL_VERSION"
-          # 使用原始三段版本 + 构建号，确保符合 semver
-          NEW_VERSION="${ORIGINAL_VERSION}+${{ steps.get-version.outputs.tag_name }}.${{ steps.get-version.outputs.build_date }}"
+          # 构建号必须是纯整数，使用日期格式 YYYYMMDD
+          BUILD_NUMBER="${{ steps.get-version.outputs.build_date }}"
+          NEW_VERSION="${ORIGINAL_VERSION}+${BUILD_NUMBER}"
           echo "新版本: $NEW_VERSION"
           sed -i "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
           grep "^version:" pubspec.yaml
