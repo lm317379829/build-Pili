@@ -108,10 +108,10 @@ jobs:
             convert -size 288x288 xc:transparent pilipalus-source/android/app/src/main/res/drawable/ic_launcher_background.png
             echo "生成 drawable/ic_launcher_background.png (288x288, 100% 纯透明背景图)"
             
-            # 生成自适应前景图标（将完整图标限制在 60% 黄金安全区，透明填充至 288x288，实现桌面完美呼吸感透明图标）
-            convert assets/icon.png -resize 172x172 -background transparent -gravity center -extent 288x288 \
+            # 生成自适应前景图标（放大至 240px/83% 填充圆形裁剪区，消除 Android 12+ SplashScreen 黑圈）
+            convert assets/icon.png -resize 240x240 -background transparent -gravity center -extent 288x288 \
               pilipalus-source/android/app/src/main/res/drawable/ic_launcher_foreground.png
-            echo "生成 drawable/ic_launcher_foreground.png (288x288, 60% 主体安全边距，纯透明底)"
+            echo "生成 drawable/ic_launcher_foreground.png (288x288, 240px 主体填充圆形裁剪区)"
             # 物理清理所有与生成的 PNG 冲突的旧同名 XML 资源文件，防止 Gradle 资源合并 Duplicate resources 报错
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_background.xml" -delete
             find pilipalus-source/android/app/src/main/res/ -name "ic_launcher_foreground.xml" -delete
