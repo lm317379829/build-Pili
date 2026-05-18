@@ -133,6 +133,47 @@ jobs:
             echo "⚠️ 警告: 未找到自定义图标 assets/icon.png，将使用默认图标"
           fi
 
+      - name: 配置启动界面白色背景
+        if: steps.check-update.outputs.need_build == 'true'
+        run: |
+          RES_DIR="pilipalus-source/android/app/src/main/res"
+          
+          # 覆写 launch_background.xml 为纯白色（修复启动界面黑底，适用于 Android 12 以下）
+          for dir in "$RES_DIR/drawable" "$RES_DIR/drawable-v21"; do
+            mkdir -p "$dir"
+            cat > "$dir/launch_background.xml" << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@android:color/white" />
+          </layer-list>
+          XMLEOF
+            echo "✅ 已设置 $dir/launch_background.xml 为白色背景"
+          done
+          
+          # 为 Android 12+ 注入 SplashScreen 白色背景属性
+          STYLES_FILE="$RES_DIR/values/styles.xml"
+          if [ -f "$STYLES_FILE" ]; then
+            if ! grep -q "windowSplashScreenBackground" "$STYLES_FILE"; then
+              sed -i '/<style.*LaunchTheme/,/<\/style>/ {
+                /<\/style>/ i\        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+              }' "$STYLES_FILE"
+              echo "✅ 已向 styles.xml 注入 Android 12+ SplashScreen 白色背景"
+            fi
+          fi
+          
+          # 同样处理夜间模式的 styles.xml
+          STYLES_NIGHT="$RES_DIR/values-night/styles.xml"
+          if [ -f "$STYLES_NIGHT" ]; then
+            if ! grep -q "windowSplashScreenBackground" "$STYLES_NIGHT"; then
+              sed -i '/<style.*LaunchTheme/,/<\/style>/ {
+                /<\/style>/ i\        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+              }' "$STYLES_NIGHT"
+              echo "✅ 已向 values-night/styles.xml 注入 Android 12+ SplashScreen 白色背景"
+            fi
+          fi
+          
+          echo "✅ 启动界面白色背景配置完成"
+
       - name: 修改应用名称
         if: steps.check-update.outputs.need_build == 'true'
         run: |
