@@ -7,7 +7,7 @@ on:
 
 env:
   SOURCE_REPO: bggRGjQaUbCoE/PiliPlus
-  TARGET_REPO: lm317379829/build-Pili
+  TARGET_REPO: lm317379829/buildPiliPili
   APP_NAME: 哔哩哔哩
   KEEP_COUNT: 3
 
@@ -24,29 +24,24 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 获取 PiliPlus 最新 Release 版本
-        id: get-version
+      - name: 获取 PiliPlus 最新 commit SHA
+        id: get-latest
         run: |
-          LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ env.SOURCE_REPO }}/releases/latest" | jq -r '.tag_name')
-          echo "上游最新版本: $LATEST_RELEASE"
-          VERSION=${LATEST_RELEASE#v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag_name=$LATEST_RELEASE" >> $GITHUB_OUTPUT
-          BUILD_DATE=$(date +%Y%m%d)
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "将使用版本: $VERSION (标签: $LATEST_RELEASE)"
+          LATEST_SHA=$(curl -s "https://api.github.com/repos/${{ env.SOURCE_REPO }}/commits/main" | jq -r '.sha')
+          echo "sha=$LATEST_SHA" >> $GITHUB_OUTPUT
+          echo "最新 commit SHA: $LATEST_SHA"
 
       - name: 检查是否需要构建
         id: check-update
         run: |
-          if [ -f .last_build_version ]; then
-            LAST_VERSION=$(cat .last_build_version)
-            echo "上次构建版本: $LAST_VERSION"
-            if [ "$LAST_VERSION" = "${{ steps.get-version.outputs.tag_name }}" ]; then
-              echo "版本未变化，跳过构建"
+          if [ -f .last_build_sha ]; then
+            LAST_SHA=$(cat .last_build_sha)
+            echo "上次构建的 SHA: $LAST_SHA"
+            if [ "$LAST_SHA" = "${{ steps.get-latest.outputs.sha }}" ]; then
+              echo "没有检测到更新，跳过构建"
               echo "need_build=false" >> $GITHUB_OUTPUT
             else
-              echo "检测到新版本！"
+              echo "检测到更新！"
               echo "need_build=true" >> $GITHUB_OUTPUT
             fi
           else
@@ -61,23 +56,6 @@ jobs:
           repository: ${{ env.SOURCE_REPO }}
           path: pilipalus-source
           fetch-depth: 0
-
-      - name: 修改 pubspec.yaml 版本号
-        if: steps.check-update.outputs.need_build == 'true'
-        run: |
-          cd pilipalus-source
-          CURRENT_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
-          echo "当前版本: $CURRENT_VERSION"
-          # 提取原始版本号的前三段 (如 2.0.7.2 -> 2.0.7)
-          ORIGINAL_VERSION=$(echo "$CURRENT_VERSION" | sed 's/+.*//' | sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/')
-          echo "原始三段版本: $ORIGINAL_VERSION"
-          # 构建号必须是纯整数，使用日期格式 YYYYMMDD
-          BUILD_NUMBER="${{ steps.get-version.outputs.build_date }}"
-          NEW_VERSION="${ORIGINAL_VERSION}+${BUILD_NUMBER}"
-          echo "新版本: $NEW_VERSION"
-          sed -i "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
-          grep "^version:" pubspec.yaml
-          echo "pubspec.yaml 版本已更新"
 
       - name: 设置 Java 环境
         if: steps.check-update.outputs.need_build == 'true'
@@ -102,57 +80,86 @@ jobs:
         if: steps.check-update.outputs.need_build == 'true'
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: 复制自定义图标
+      - name: 复制自定义图标并生成所有分辨率图标
         if: steps.check-update.outputs.need_build == 'true'
         run: |
           if [ -f "assets/icon.png" ]; then
             echo "找到自定义图标，正在处理..."
             
+            # 创建 drawable-v21 目录（自适应图标前景）
             mkdir -p pilipalus-source/android/app/src/main/res/drawable-v21
+            
+            # 创建 mipmap 目录
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p "pilipalus-source/android/app/src/main/res/mipmap-$density"
             done
             
-            convert assets/icon.png -resize 288x288 pilipalus-source/android/app/src/main/res/drawable-v21/ic_launcher_background.png
-            echo "生成 drawable-v21/ic_launcher_background.png (288x288)"
-            
-            convert -size 108x108 xc:transparent pilipalus-source/android/app/src/main/res/drawable-v21/ic_launcher_foreground.png
-            echo "生成透明的前景图标"
-            
+            # 图标尺寸映射
             declare -A SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+            
+            # 生成 mipmap 图标
             for density in "${!SIZES[@]}"; do
               size="${SIZES[$density]}"
               convert assets/icon.png -resize ${size}x${size} "pilipalus-source/android/app/src/main/res/mipmap-$density/ic_launcher.png"
+              echo "生成 mipmap-$density/ic_launcher.png (${size}x${size})"
             done
-            echo "生成传统 mipmap 图标"
             
-            printf '<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@drawable/ic_launcher_background"/>\n    <foreground android:drawable="@drawable/ic_launcher_foreground"/>\n</adaptive-icon>\n' > pilipalus-source/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-            echo "修改自适应图标配置"
+            # 生成自适应图标前景图标 (drawable-v21)
+            # 标准尺寸 108x108 用于 foreground
+            convert assets/icon.png -resize 108x108 pilipalus-source/android/app/src/main/res/drawable-v21/ic_launcher_foreground.png
+            echo "生成 drawable-v21/ic_launcher_foreground.png (108x108)"
             
-            mkdir -p pilipalus-source/assets/images/logo
+            # 复制到 assets/logo 目录
             cp assets/icon.png pilipalus-source/assets/images/logo/logo_2.png
             cp assets/icon.png pilipalus-source/assets/images/logo/logo.png
             
-            echo "图标处理完成"
+            echo "✅ 图标处理完成"
           else
-            echo "警告: 未找到自定义图标 assets/icon.png"
+            echo "⚠️ 警告: 未找到自定义图标 assets/icon.png，将使用默认图标"
           fi
 
       - name: 修改应用名称
         if: steps.check-update.outputs.need_build == 'true'
         run: |
-          # 使用 sed 直接替换原文件中的 app_name，避免创建重复文件
-          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">哔哩哔哩<\/string>/' pilipalus-source/android/app/src/main/res/values/strings.xml
-          grep "app_name" pilipalus-source/android/app/src/main/res/values/strings.xml
-          echo "应用名称已修改为: ${{ env.APP_NAME }}"
+          STRINGS_FILE="pilipalus-source/android/app/src/main/res/values/string.xml"
+          mkdir -p "$(dirname "$STRINGS_FILE")"
+          cat > "$STRINGS_FILE" << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">哔哩哔哩</string>
+              <string name="search">搜索</string>
+              <string name="offline_video">离线视频</string>
+          </resources>
+          XMLEOF
+          echo "✅ 应用名称已修改为: ${{ env.APP_NAME }}"
 
-      - name: 修改更新检查链接
+      - name: 修改更新检查链接指向本仓库
         if: steps.check-update.outputs.need_build == 'true'
         run: |
           echo "修改更新检查 API 指向本仓库..."
-          sed -i "s|https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases|https://api.github.com/repos/${{ env.TARGET_REPO }}/releases|g" pilipalus-source/lib/http/api.dart
+          
+          # 修改 api.dart 中的 latestApp URL
+          sed -i "s|https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases|https://api.github.com/repos/${{ env.TARGET_REPO }}/releases|g" \
+            pilipalus-source/lib/http/api.dart
+          
+          # 验证修改
           grep "latestApp" pilipalus-source/lib/http/api.dart
-          echo "更新检查 API 已修改"
+          echo "✅ 更新检查 API 已修改"
+
+      - name: 获取版本信息
+        if: steps.check-update.outputs.need_build == 'true'
+        id: version
+        run: |
+          cd pilipalus-source
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+          VERSION_CODE=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
+          BUILD_DATE=$(date +%Y%m%d)
+          TAG_NAME="v${VERSION}_${BUILD_DATE}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "版本: $VERSION | 标签: $TAG_NAME"
 
       - name: 安装依赖
         if: steps.check-update.outputs.need_build == 'true'
@@ -165,29 +172,37 @@ jobs:
         run: |
           cd pilipalus-source
           flutter build apk --release --split-per-abi --target-platform android-arm64
-          APK_NAME="${{ env.APP_NAME }}_${{ steps.get-version.outputs.tag_name }}_arm64-v8a.apk"
+          APK_NAME="${{ env.APP_NAME }}_${{ steps.version.outputs.tag_name }}_arm64-v8a.apk"
           mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "$APK_NAME"
-          echo "APK 构建完成: $APK_NAME"
+          echo "✅ APK 构建完成: $APK_NAME"
           ls -lh "$APK_NAME"
 
       - name: 发布 Release
         if: steps.check-update.outputs.need_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get-version.outputs.tag_name }}
-          name: "${{ env.APP_NAME }} ${{ steps.get-version.outputs.tag_name }}"
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: "${{ env.APP_NAME }} ${{ steps.version.outputs.tag_name }}"
           body: |
-            ## 构建信息
+            ## 📱 构建信息
 
             | 项目 | 值 |
             |------|-----|
             | 源仓库 | ${{ env.SOURCE_REPO }} |
-            | 版本 | ${{ steps.get-version.outputs.tag_name }} |
-            | 构建日期 | ${{ steps.get-version.outputs.build_date }} |
+            | Commit | `${{ steps.get-latest.outputs.sha }}` |
+            | 构建日期 | ${{ steps.version.outputs.build_date }} |
             | 应用名称 | ${{ env.APP_NAME }} |
             | 架构 | arm64-v8a |
+
+            ## 📝 说明
+
+            基于 [PiliPlus](${{ env.SOURCE_REPO }}) 最新版本构建，包含：
+            - ✅ 自定义应用图标
+            - ✅ 自定义应用名称：${{ env.APP_NAME }}
+            - ✅ 仅 arm64-v8a 架构（适用于大多数现代 Android 设备）
+            - ✅ 更新检查指向本仓库
           files: |
-            pilipalus-source/${{ env.APP_NAME }}_${{ steps.get-version.outputs.tag_name }}_arm64-v8a.apk
+            pilipalus-source/${{ env.APP_NAME }}_${{ steps.version.outputs.tag_name }}_arm64-v8a.apk
           draft: false
           prerelease: false
 
@@ -197,67 +212,78 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "开始清理旧 Release，保留最近 ${{ env.KEEP_COUNT }} 个..."
-          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases" | jq -r '.[].tag_name')
+          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            | jq -r '.[].tag_name')
           COUNT=0
           for tag in $RELEASES; do
             COUNT=$((COUNT + 1))
             if [ $COUNT -gt ${{ env.KEEP_COUNT }} ]; then
               echo "删除旧 Release: $tag"
-              curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
-              curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$tag"
+              curl -s -X DELETE \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
+              echo "删除旧 Tag: $tag"
+              curl -s -X DELETE \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$tag"
             fi
           done
-          echo "Release 清理完成"
+          echo "✅ Release 清理完成"
 
       - name: 清理旧 Action Run
         if: steps.check-update.outputs.need_build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "开始清理旧 Action Run..."
-          RUNS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-pilipalus.yml/runs?per_page=100" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          echo "开始清理旧 Action Run，保留最近 ${{ env.KEEP_COUNT }} 个..."
+          RUNS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-pilipalus.yml/runs?per_page=100" \
+            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
           COUNT=0
           for run_id in $RUNS; do
             COUNT=$((COUNT + 1))
             if [ $COUNT -gt ${{ env.KEEP_COUNT }} ]; then
               echo "删除旧 Action Run: $run_id"
-              curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+              curl -s -X DELETE \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
             fi
           done
-          echo "Action Run 清理完成"
+          echo "✅ Action Run 清理完成"
 
       - name: 更新构建记录
         if: steps.check-update.outputs.need_build == 'true'
         run: |
-          echo "${{ steps.get-version.outputs.tag_name }}" > .last_build_version
+          echo "${{ steps.get-latest.outputs.sha }}" > .last_build_sha
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .last_build_version
-          git commit -m "chore: update build version to ${{ steps.get-version.outputs.tag_name }}" || echo "No changes to commit"
+          git add .last_build_sha
+          git commit -m "chore: update build record to ${{ steps.get-latest.outputs.sha }}" || echo "No changes to commit"
           git push
 
       - name: 构建完成通知
         if: steps.check-update.outputs.need_build == 'true'
         run: |
           echo ""
-          echo "======================================"
-          echo "        构建成功完成！"
-          echo "======================================"
-          echo " 应用名称: ${{ env.APP_NAME }}"
-          echo " 版本标签: ${{ steps.get-version.outputs.tag_name }}"
-          echo " 架构: arm64-v8a"
-          echo " 构建日期: ${{ steps.get-version.outputs.build_date }}"
-          echo "======================================"
+          echo "╔════════════════════════════════════════╗"
+          echo "║        ✅ 构建成功完成！               ║"
+          echo "╠════════════════════════════════════════╣"
+          echo "║ 应用名称: ${{ env.APP_NAME }}"
+          echo "║ 版本标签: ${{ steps.version.outputs.tag_name }}"
+          echo "║ 架构:     arm64-v8a"
+          echo "║ Commit:   ${{ steps.get-latest.outputs.sha }}"
+          echo "╚════════════════════════════════════════╝"
           echo ""
 
       - name: 无更新通知
         if: steps.check-update.outputs.need_build != 'true'
         run: |
           echo ""
-          echo "======================================"
-          echo "     未检测到新版本"
-          echo "======================================"
-          echo " 当前版本: $(cat .last_build_version 2>/dev/null || echo '无记录')"
-          echo " 跳过本次构建"
-          echo "======================================"
+          echo "╔════════════════════════════════════════╗"
+          echo "║     ℹ️  未检测到 PiliPlus 更新        ║"
+          echo "╠════════════════════════════════════════╣"
+          echo "║ 当前 SHA: ${{ steps.get-latest.outputs.sha }}"
+          echo "║ 跳过本次构建"
+          echo "╚════════════════════════════════════════╝"
           echo ""
