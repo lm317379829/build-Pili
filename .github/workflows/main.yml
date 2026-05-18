@@ -100,7 +100,7 @@ jobs:
             # 生成 mipmap 图标
             for density in "${!SIZES[@]}"; do
               size="${SIZES[$density]}"
-              convert assets/icon.png -resize ${size}x${size} "pilipalus-source/android/app/src/main/res/mipmap-$density/ic_launcher.png"
+              convert assets/icon.png -background transparent -resize ${size}x${size} "pilipalus-source/android/app/src/main/res/mipmap-$density/ic_launcher.png"
               echo "生成 mipmap-$density/ic_launcher.png (${size}x${size})"
             done
             
