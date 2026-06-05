@@ -220,7 +220,7 @@ jobs:
       - name: 配置编译版本与 Commit Hash 信息
         if: steps.check-update.outputs.need_build == 'true'
         run: |
-          BUILD_TIME_MS=$(date +%s000)
+          BUILD_TIME_MS=$(date +%s)
           cat > pilipalus-source/lib/build_config.dart << EOF
           abstract final class BuildConfig {
             static const int versionCode = ${{ steps.version.outputs.version_code }};
