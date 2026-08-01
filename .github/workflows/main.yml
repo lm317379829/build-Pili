@@ -76,7 +76,7 @@ jobs:
           flutter-version-file: 'pilipalus-source/pubspec.yaml'
           cache: true
 
-      - name: 应用上游 SDK 补丁 (patch.ps1)
+      - name: 应用上游 SDK 补丁
         if: steps.check-update.outputs.need_build == 'true'
         shell: bash
         run: |
