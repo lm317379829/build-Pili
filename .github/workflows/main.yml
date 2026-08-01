@@ -76,6 +76,15 @@ jobs:
           flutter-version-file: 'pilipalus-source/pubspec.yaml'
           cache: true
 
+      - name: 应用上游 SDK 补丁 (patch.ps1)
+        if: steps.check-update.outputs.need_build == 'true'
+        shell: pwsh
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}/pilipalus-source
+        run: |
+          Set-Location pilipalus-source
+          ./lib/scripts/patch.ps1 android
+
       - name: 安装 ImageMagick
         if: steps.check-update.outputs.need_build == 'true'
         run: sudo apt-get update && sudo apt-get install -y imagemagick
@@ -299,7 +308,7 @@ jobs:
           ls -lh "$APK_NAME"
 
       - name: 发布 Release
-        if: steps.check-update.outputs.need_build == 'true'
+        if: steps.check-update.outputs.need_build == 'true' && success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
@@ -328,7 +337,7 @@ jobs:
           prerelease: false
 
       - name: 清理旧 Release
-        if: steps.check-update.outputs.need_build == 'true'
+        if: steps.check-update.outputs.need_build == 'true' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -353,7 +362,7 @@ jobs:
           echo "✅ Release 清理完成"
 
       - name: 清理旧 Action Run
-        if: steps.check-update.outputs.need_build == 'true'
+        if: steps.check-update.outputs.need_build == 'true' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -380,7 +389,7 @@ jobs:
           echo "✅ Action Run 清理完成"
 
       - name: 更新构建记录
-        if: steps.check-update.outputs.need_build == 'true'
+        if: steps.check-update.outputs.need_build == 'true' && success()
         run: |
           echo "${{ steps.get-latest.outputs.sha }}" > .last_build_sha
           git config user.name "github-actions[bot]"
@@ -390,7 +399,7 @@ jobs:
           git push
 
       - name: 构建完成通知
-        if: steps.check-update.outputs.need_build == 'true'
+        if: steps.check-update.outputs.need_build == 'true' && success()
         run: |
           echo ""
           echo "╔════════════════════════════════════════╗"
