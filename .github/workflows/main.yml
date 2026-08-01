@@ -78,12 +78,13 @@ jobs:
 
       - name: 应用上游 SDK 补丁 (patch.ps1)
         if: steps.check-update.outputs.need_build == 'true'
-        shell: pwsh
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}/pilipalus-source
+        shell: bash
         run: |
-          Set-Location pilipalus-source
-          ./lib/scripts/patch.ps1 android
+          # GITHUB_WORKSPACE 属系统变量不可被 env 覆盖，故将补丁文件复制到 workspace 根目录 lib/scripts 下，
+          # 使 patch.ps1 内的 $GITHUB_WORKSPACE/lib/scripts/*.patch 路径可解析
+          mkdir -p lib/scripts
+          cp pilipalus-source/lib/scripts/*.patch lib/scripts/
+          pwsh pilipalus-source/lib/scripts/patch.ps1 android
 
       - name: 安装 ImageMagick
         if: steps.check-update.outputs.need_build == 'true'
