@@ -90,9 +90,10 @@ jobs:
         shell: bash
         run: |
           # GITHUB_WORKSPACE 属系统变量不可被 env 覆盖，故将补丁文件复制到 workspace 根目录 lib/scripts 下，
-          # 使 patch.ps1 内的 $GITHUB_WORKSPACE/lib/scripts/*.patch 路径可解析
+          # 使 patch.ps1 内的 $GITHUB_WORKSPACE/lib/scripts/*.patch 及
+          # $GITHUB_WORKSPACE/lib/scripts/material/*.patch 路径可解析（须含 material 子目录）
           mkdir -p lib/scripts
-          cp pilipalus-source/lib/scripts/*.patch lib/scripts/
+          cp -r pilipalus-source/lib/scripts/. lib/scripts/
           pwsh pilipalus-source/lib/scripts/patch.ps1 android
 
       - name: 安装 ImageMagick
