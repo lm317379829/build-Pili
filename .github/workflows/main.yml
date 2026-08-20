@@ -84,13 +84,27 @@ jobs:
           # 该命令会失败且下载不到任何依赖，导致 patch.ps1 找不到 material_ui 而报错。
           # 故这里根据上游 pubspec.yaml 动态生成一个仅声明 material_ui 的根目录 pubspec.yaml，
           # 使 patch.ps1 内部的 flutter pub get 能先同步最新 material_ui，再在其上应用补丁。
-          MATERIAL_UI_VER=$(awk '/^  material_ui:/{print $2; exit}' pilipalus-source/pubspec.yaml)
           SDK_VER=$(awk '/^  sdk:/{sub(/.*sdk:[[:space:]]*"/, ""); sub(/".*/, ""); print; exit}' pilipalus-source/pubspec.yaml)
           FLUTTER_VER=$(awk '/^  flutter:/{print $2; exit}' pilipalus-source/pubspec.yaml)
-          if [ -z "$MATERIAL_UI_VER" ] || [ -z "$SDK_VER" ] || [ -z "$FLUTTER_VER" ]; then
-            echo "❌ 无法从上游 pubspec.yaml 解析 material_ui / sdk / flutter 版本" >&2
+          if [ -z "$SDK_VER" ] || [ -z "$FLUTTER_VER" ]; then
+            echo "❌ 无法从上游 pubspec.yaml 解析 sdk / flutter 版本" >&2
             exit 1
           fi
+
+          # 先在真实项目目录内执行 pub get：预填充 pub cache（media_kit 等 git 依赖也在此下载），
+          # 并生成 pubspec.lock 以锁定各依赖的精确版本
+          cd pilipalus-source
+          flutter pub get
+          cd ..
+
+          # 从 pubspec.lock 提取 material_ui 的精确版本。不能用 pubspec.yaml 里的 ^ 约束，否则根目录
+          # pub get 会解析到更新的版本（如 1.0.1），导致补丁打在错误版本上而最终构建编译失败
+          MATERIAL_UI_VER=$(awk '/^  material_ui:/{found=1} found && /^    version:/{gsub(/"/, "", $2); print $2; exit}' pilipalus-source/pubspec.lock)
+          if [ -z "$MATERIAL_UI_VER" ]; then
+            echo "❌ 无法从上游 pubspec.lock 解析 material_ui 精确版本" >&2
+            exit 1
+          fi
+
           cat > pubspec.yaml << EOF
           name: pili_build_workspace
           publish_to: none
@@ -101,10 +115,6 @@ jobs:
             material_ui: $MATERIAL_UI_VER
           EOF
           echo "已生成根目录 pubspec.yaml，material_ui: $MATERIAL_UI_VER"
-
-          # 在真实项目目录内执行 pub get 预填充 pub cache（media_kit 等 git 依赖也在此下载）
-          cd pilipalus-source
-          flutter pub get
 
       - name: 应用上游 SDK 补丁
         if: steps.check-update.outputs.need_build == 'true'
