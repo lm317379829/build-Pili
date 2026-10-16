@@ -350,6 +350,7 @@ jobs:
           ls -lh "$APK_NAME"
 
       - name: 发布 Release
+        id: release
         if: steps.check-update.outputs.need_build == 'true' && success()
         uses: softprops/action-gh-release@v2
         with:
@@ -379,7 +380,7 @@ jobs:
           prerelease: false
 
       - name: 清理旧 Release
-        if: steps.check-update.outputs.need_build == 'true' && success()
+        if: steps.check-update.outputs.need_build == 'true' && steps.release.conclusion == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -391,14 +392,13 @@ jobs:
           for tag in $RELEASES; do
             COUNT=$((COUNT + 1))
             if [ $COUNT -gt ${{ env.KEEP_COUNT }} ]; then
-              echo "删除旧 Release: $tag"
-              curl -s -X DELETE \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
-              echo "删除旧 Tag: $tag"
-              curl -s -X DELETE \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$tag"
+              echo "删除旧 Release 及 Tag: $tag"
+              gh release delete "$tag" --cleanup-tag -y || {
+                # 兼容降级处理
+                curl -s -X DELETE \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$tag"
+              }
             fi
           done
           echo "✅ Release 清理完成"
